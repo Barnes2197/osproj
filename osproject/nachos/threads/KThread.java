@@ -137,7 +137,7 @@ public class KThread {
      * its target's <tt>run</tt> method).
      */
     public void fork() {
-	//Lib.assertTrue(status == statusNew);
+	Lib.assertTrue(status == statusNew);
 	Lib.assertTrue(target != null);
 	
 	Lib.debug(dbgThread,
@@ -413,15 +413,14 @@ public class KThread {
      * Tests whether this module is working.
      */
     public static void selfTest() {
-        Lib.debug(dbgThread, "Enter KThread.selfTest");
-        System.out.println("Enter KThread.selfTest");
-        
-        new KThread(new PingTest(1)).setName("forked thread").fork();
-        new PingTest(0).run();
-        
-        KThreadTest.simpleJoinTest();
-        CommunicatorTest commTester = new CommunicatorTest();
-        commTester.commTest(10, false);
+	Lib.debug(dbgThread, "Enter KThread.selfTest");
+	System.out.println("Enter KThread.selfTest");
+	
+	new KThread(new PingTest(1)).setName("forked thread").fork();
+	new PingTest(0).run();
+	
+    KThreadTest.simpleJoinTest();
+    
     
     }
 
