@@ -72,6 +72,10 @@ public class Condition2 {
     	}
     }
 
+    public int sizeOfQueue(){
+      return waitQueue.size();
+    }
+
     private Lock conditionLock;
     private LinkedList<KThread> waitQueue;
 }
