@@ -413,15 +413,11 @@ public class KThread {
      * Tests whether this module is working.
      */
     public static void selfTest() {
-	Lib.debug(dbgThread, "Enter KThread.selfTest");
-	System.out.println("Enter KThread.selfTest");
-	
-	new KThread(new PingTest(1)).setName("forked thread").fork();
-	new PingTest(0).run();
-	
-    KThreadTest.simpleJoinTest();
-    
-    
+        Lib.debug(dbgThread, "Enter KThread.selfTest");
+        System.out.println("Enter KThread.selfTest");
+        
+        new KThread(new PingTest(1)).setName("forked thread").fork();
+        new PingTest(0).run();
     }
 
     private static final char dbgThread = 't';
