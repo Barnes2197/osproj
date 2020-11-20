@@ -3,7 +3,7 @@ package nachos.userprog;
 import nachos.machine.*;
 import nachos.threads.*;
 import nachos.userprog.*;
-
+import java.utils.*;
 import java.io.EOFException;
 
 /**
@@ -26,7 +26,10 @@ public class UserProcess {
 	int numPhysPages = Machine.processor().getNumPhysPages();
 	pageTable = new TranslationEntry[numPhysPages];
 	for (int i=0; i<numPhysPages; i++)
-	    pageTable[i] = new TranslationEntry(i,i, true,false,false,false);
+        pageTable[i] = new TranslationEntry(i,i, true,false,false,false);
+        
+    openFiles = new ArrayList<OpenFile>();
+    links = new Hashtable<String, Integer>();
     }
     
     /**
@@ -390,11 +393,26 @@ public class UserProcess {
     public int handleSyscall(int syscall, int a0, int a1, int a2, int a3) {
 	switch (syscall) {
 	case syscallHalt:
-	    return handleHalt();
-
-
+        return handleHalt();
+    case syscallExit:
+        return handleExit(a0);
+    case syscallExec:
+        return handleExec(a0,a1,a2);
+    case syscallJoin:
+        return handleJoin(a0, a1);
+    case syscallCreate:
+        return handleCreate(a0);
+    case syscallOpen:
+        return handleOpen(a0);
+    case syscallRead:
+        return handleRead(a0,a1,a2);
+    case syscallWrite:
+        return handleClose(a0);
+    case syscallUnlink:
+        return handleUnlink(a0, a1, a2);
 	default:
-	    Lib.debug(dbgProcess, "Unknown syscall " + syscall);
+        Lib.debug(dbgProcess, "Unknown syscall " + syscall);
+        handleExit(-1);
 	    Lib.assertNotReached("Unknown system call!");
 	}
 	return 0;
@@ -430,6 +448,121 @@ public class UserProcess {
 	}
     }
 
+    public int handleCreate(int name){
+        String filename = readVirtualMemoryString(name, max_length_of_file);
+        if (fileName == null || fileName.length() == 0) {
+            throw new NachosIllegalArgumentException("Filename Exception");
+        }
+        int size = openFiles.size();
+        for(int i = 0; i < size; ++i)
+        {
+            if(openFiles.get(i) != null && openFiles.get(i).getName().equals(filename))
+            {
+                return i;
+            }
+        }
+
+        OpenFile file = ThreadedKernel.fileSystem.open(filename, true);
+
+        openFiles.add(file);
+        return openFiles.size() - 1;
+    }
+
+    public int handleOpen(int name){
+        String filename = readVirtualMemoryString(name, max_length_of_file);
+        if (fileName == null || fileName.length() == 0) {
+            throw new NachosIllegalArgumentException("Filename Exception");
+        }
+        int size = openFiles.size();
+        OpenFile file = ThreadedKernel.fileSystem.open(filename, false);
+
+        if(links.containsKey(filename))
+        {
+            links[filename]++;
+        }
+        else {
+            links[fileName] = 1;
+        }
+        
+        openFiles.add(file);
+        return openFiles.size() - 1;
+    }
+    
+    public int handleRead(int fileIndex, int buffer, int count){
+        try {
+            OpenFile file = openFiles.get(fileIndex);
+        } catch(IndexOutOfBoundsException e)
+        {
+            throw new NachosIllegalArgumentException("FileIndex Exception");
+        }
+
+        byte[] bytes = new byte[count];
+
+        int numBytesRead = file.read(bytes, 0, count);
+        int numBytesWritten = writeVirtualMemory(buffer, bytes, 0, numBytesRead);
+
+        if (numBytesRead != numBytesWritten){
+            throw new NachosVirtualMemoryException("Expected: " + numBytesRead + "Got: " + numBytesWritten);
+        }
+
+        return numBytesRead;
+
+    }
+
+    public int handleWrite(int fileIndex, int buffer, int count) {
+        try {
+            OpenFile file = openFiles.get(fileIndex);
+        } catch(IndexOutOfBoundsException e)
+        {
+            throw new NachosIllegalArgumentException("FileIndex Exception");
+        }
+
+        byte[] bytes = new byte[count];
+
+        int numBytesToWrite= writeVirtualMemory(buffer, bytes, 0, count);
+
+        if (count != numBytesToWrite){
+            throw new NachosVirtualMemoryException("Expected: " + count + "Got: " + numBytesToWrite);
+        }
+
+        return file.read(bytes, 0, numBytesToWrite);
+    }
+
+    public int handleClose(int fileIndex) {
+        try {
+            OpenFile file = openFiles.get(fileIndex);
+        } catch(IndexOutOfBoundsException e)
+        {
+            throw new NachosIllegalArgumentException("FileIndex Exception in Close()");
+        }
+        if(links.containsKey(file.getName()) && links[file.getName()] > 0)
+        {
+            links[file.getName()]--;
+        }
+        else if{
+            throw new Exception NachosIllegalArgumentException("Close called on a file that isn't linked")
+        }
+        openFiles.remove(fileIndex);
+        file.close();
+
+        return 0;
+    }
+
+    public int handleUnlink(final int name)
+    {
+        String filename = readVirtualMemoryString(name, max_length_of_file);
+        if (fileName == null || fileName.length() == 0) {
+            throw new NachosIllegalArgumentException("Filename Exception");
+        }
+        int size = openFiles.size();
+        OpenFile file = ThreadedKernel.fileSystem.open(filename, false);
+        openFiles.remove(file);
+        if(!ThreadedKernel.fileSystem.remove(fileName)) {
+            throw new NachosFileSystemException("Unable to unlink file: " + fileName);
+        }
+        return 0;
+    }
+    
     /** The program being run by this process. */
     protected Coff coff;
 
@@ -443,7 +576,10 @@ public class UserProcess {
     
     private int initialPC, initialSP;
     private int argc, argv;
+    private static final int max_length_of_file = 256;
 	
     private static final int pageSize = Processor.pageSize;
     private static final char dbgProcess = 'a';
+    private ArrayList<OpenFile> openFiles;
+    private Hashtable<String, Integer> links;
 }
