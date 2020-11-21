@@ -22,14 +22,18 @@ public class UserProcess {
     /**
      * Allocate a new process.
      */
-    public UserProcess() {
-	int numPhysPages = Machine.processor().getNumPhysPages();
-	pageTable = new TranslationEntry[numPhysPages];
-	for (int i=0; i<numPhysPages; i++)
-        pageTable[i] = new TranslationEntry(i,i, true,false,false,false);
-        
-    openFiles = new ArrayList<OpenFile>();
-    links = new Hashtable<String, Integer>();
+        public UserProcess() {
+        int numPhysPages = Machine.processor().getNumPhysPages();
+        pageTable = new TranslationEntry[numPhysPages];
+        for (int i=0; i<numPhysPages; i++)
+            pageTable[i] = new TranslationEntry(i,i, true,false,false,false);
+            
+        openFiles = new ArrayList<OpenFile>();
+        links = new HashMap<String, Integer>();
+        children = new LinkedList<UserProcess>();
+        childStatus = new HashMap<Integer, Integer>();
+        processID = numOfProcesses;
+        numOfProcesses++;
     }
     
     /**
@@ -470,25 +474,25 @@ public class UserProcess {
 	switch (syscall) {
 	case syscallHalt:
         return handleHalt();
-    // case syscallExit:
-    //     return handleExit(a0);
-    // case syscallExec:
-    //     return handleExec(a0,a1,a2);
-    // case syscallJoin:
-    //     return handleJoin(a0, a1);
+    case syscallExit:
+        return handleExit(a0);
+    case syscallExec:
+        return handleExec(a0,a1,a2);
+    case syscallJoin:
+        return handleJoin(a0, a1);
     case syscallCreate:
         return handleCreate(a0);
     case syscallOpen:
         return handleOpen(a0);
     case syscallRead:
         return handleRead(a0,a1,a2);
-    // case syscallWrite:
-    //     return handleClose(a0);
-    // case syscallUnlink:
-    //     return handleUnlink(a0, a1, a2);
+    case syscallWrite:
+        return handleClose(a0);
+    case syscallUnlink:
+        return handleUnlink(a0);
 	default:
         Lib.debug(dbgProcess, "Unknown syscall " + syscall);
-        // handleExit(-1);
+        handleExit(-1);
 	    Lib.assertNotReached("Unknown system call!");
 	}
 	return 0;
@@ -642,6 +646,139 @@ public class UserProcess {
         }
         return 0;
     }
+
+    private int handleExec(int virtualAddress, int arg1, int argVir)
+    {
+    	if (virtualAddress < 0 || arg1 < 0 || argVir < 0)
+    	{
+    		return -1;
+    	}
+    	String fileName = readVirtualMemoryString(virtualAddress, 256);
+    	
+    	if (fileName == null)
+    	{
+    		return -1;
+    	}
+    	
+    	if (fileName.contains(".coff") != true)
+    	{
+    		return -1;
+    	}
+    	
+    	String [] holder = new String [arg1];
+    	
+    	for (int i = 0; i < arg1; i++)
+    	{
+    		byte [] buff = new byte[4];
+    		int memoryRead = readVirtualMemory(argVir + i * 4, buff);
+    		
+    		if (memoryRead != 4)
+    		{
+    			return -1;
+    		}
+    		
+    		int argumentVirtualAddr = Lib.bytesToInt(buff, 0);
+    		
+    		String argument = readVirtualMemoryString(argumentVirtualAddr, 256);
+    		
+    		if(argument == null)
+    		{
+    			return -1;
+    		}
+    		holder[i] = argument;
+    	}
+    	
+    	UserProcess childProcess = UserProcess.newUserProcess();
+    	
+    	if(childProcess.execute(fileName, holder) == false)
+    	{
+    		return -1;
+    	}
+    	
+    	childProcess.parentProcess = this;
+    	this.children.add(childProcess);
+    	
+    	return childProcess.processID;
+    }
+
+    private int handleExit(int status)
+    {
+    	if (parentProcess != null)
+    	{
+    		lock.acquire();
+    		parentProcess.childStatus.put(processID, status);
+    		lock.release();
+    	}
+    	
+    	unloadSections();
+    	
+    	for(UserProcess process: children)
+    	{
+    		process.parentProcess = null;
+    	}
+    	
+    	if (processID == 0)
+    	{
+    		Kernel.kernel.terminate();
+    	}
+    	else
+    	{
+    		UThread.finish();
+    	}
+    	return 0;
+    }
+
+    private int handleJoin(int processID, int statusVAddr)
+    {
+    	if (processID < 0 || statusVAddr < 0)
+    	{
+    		return -1;
+		}
+		
+    	UserProcess child = null;
+    	
+    	for (int i = 0; i < children.size(); i++)
+    	{
+    		if(children.get(i).processID == processID);
+    		{
+				child = children.get(i);
+    		}
+    	}
+    	
+    	
+    	if (child == null)
+    	{
+    		return -1;
+		}
+		
+    	child.thread.join();
+    	
+    	child.parentProcess = null;
+    	children.remove(child);
+    	lock.acquire();
+    	Integer status = childStatus.get(child.processID);
+    	lock.release();
+    	
+    	if (status == null)
+    	{
+    		return 0;
+    	}
+    	else
+    	{
+    		byte [] buff = new byte[4];
+    		buff = Lib.bytesFromInt(status);
+    		int count = writeVirtualMemory(statusVAddr, buff);
+    		
+    		if(count == 4)
+    		{
+    			return 1;
+    		}
+    		else{
+    			return 0;
+    		}
+    	}
+    	
+    }
     
     /** The program being run by this process. */
     protected Coff coff;
@@ -662,5 +799,14 @@ public class UserProcess {
     private static final int pageSize = Processor.pageSize;
     private static final char dbgProcess = 'a';
     private ArrayList<OpenFile> openFiles;
-    private Hashtable<String, Integer> links;
+    private HashMap<String, Integer> links;
+
+    protected int processID;
+    private UserProcess parentProcess;
+    private LinkedList<UserProcess> children;
+    private Lock lock;
+    private UThread thread;
+    private int count = 0;
+    protected HashMap <Integer, Integer> childStatus;
+    public static int numOfProcesses = 0;
 }
