@@ -33,8 +33,9 @@ public class UserKernel extends ThreadedKernel {
      * Test the console device.
      */	
     public void selfTest() {
-	super.selfTest();
-
+    super.selfTest();
+    //System.out.println("Userprocess: " + new UserProcess().handleCreate(1)); 
+    //This is where to run the test.
 	System.out.println("Testing the console device. Typed characters");
 	System.out.println("will be echoed until q is typed.");
 
@@ -90,6 +91,7 @@ public class UserKernel extends ThreadedKernel {
      * @see	nachos.machine.Machine#getShellProgramName
      */
     public void run() {
+    
 	super.run();
 
 	UserProcess process = UserProcess.newUserProcess();
