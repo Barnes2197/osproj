@@ -1,5 +1,6 @@
 package nachos.userprog;
 
+import java.util.*;
 import nachos.machine.*;
 import nachos.threads.*;
 import nachos.userprog.*;
@@ -27,15 +28,17 @@ public class UserKernel extends ThreadedKernel {
 	Machine.processor().setExceptionHandler(new Runnable() {
 		public void run() { exceptionHandler(); }
 	    });
+
+	freePages = new LinkedList<Integer>();
+	pageLock = new Lock();
     }
 
     /**
      * Test the console device.
      */	
     public void selfTest() {
-    super.selfTest();
-    //System.out.println("Userprocess: " + new UserProcess().handleCreate(1)); 
-    //This is where to run the test.
+	super.selfTest();
+
 	System.out.println("Testing the console device. Typed characters");
 	System.out.println("will be echoed until q is typed.");
 
@@ -91,7 +94,6 @@ public class UserKernel extends ThreadedKernel {
      * @see	nachos.machine.Machine#getShellProgramName
      */
     public void run() {
-    
 	super.run();
 
 	UserProcess process = UserProcess.newUserProcess();
@@ -108,10 +110,47 @@ public class UserKernel extends ThreadedKernel {
     public void terminate() {
 	super.terminate();
     }
+    
+    /**
+     * Allocate pages by removing some from the freePages LinkedList
+     */
+    public List<Integer> allocatePages(int numPages)
+    {
+    	pageLock.acquire();
+    	
+    	if (numPages <= 0 || numPages > freePages.size())
+    	{
+    		pageLock.release();
+    		return null;
+    	}
+    	
+    	List<Integer> allocatedPages = new LinkedList<Integer>();
+    	
+    	for(int i = 0; i < numPages; i++)
+    		allocatedPages.add(freePages.remove());
+    	
+    	pageLock.release();
+    	
+    	return allocatedPages;
+    }
+    
+    public void freePages(List<Integer> allocatedPages)
+    {
+    	pageLock.acquire();
+    	
+    	for(Integer p: allocatedPages)
+    		freePages.add(p);
+    	
+    	pageLock.release();
+    }
 
     /** Globally accessible reference to the synchronized console. */
     public static SynchConsole console;
 
     // dummy variables to make javac smarter
     private static Coff dummy1 = null;
+    
+    private Lock pageLock;
+    
+    private LinkedList<Integer> freePages;
 }
