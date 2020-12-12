@@ -86,7 +86,7 @@ public class TLBManager
 
 	public void clear(){
 		for(int i = 0; i < Machine.processor().getTLBSize(); i++){
-			entry = Machine.processor().readTLBEntry(i);
+			TranslationEntry entry = Machine.processor().readTLBEntry(i);
 			sendToPageTable(i);
 			entry.valid = false;
 			Machine.processor().writeTLBEntry(i, entry);

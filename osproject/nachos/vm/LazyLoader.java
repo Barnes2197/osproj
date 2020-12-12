@@ -53,7 +53,9 @@ public class LazyLoader
 				entry = loadCodePage(pageItem.vpn, ppn);
 			else
 				entry = loadStackPage(pageItem.vpn, ppn);
-		}
+        }
+        
+        return entry;
 	}
 	private Coff coff;
 	private CodePage[] codePages;

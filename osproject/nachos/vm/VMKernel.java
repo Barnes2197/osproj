@@ -65,8 +65,8 @@ public class VMKernel extends UserKernel {
     	return page.entry;
     }
 
-    public SwapFile getSwapFile(){
-        if(!swapfile){
+    public static SwapFile getSwapFile(){
+        if(swapfile == null){
             swapfile = new SwapFile();
         }
 
