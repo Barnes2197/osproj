@@ -29,7 +29,9 @@ public class UserKernel extends ThreadedKernel {
 		public void run() { exceptionHandler(); }
 	    });
 
-	freePages = new LinkedList<Integer>();
+    freePages = new LinkedList<Integer>();
+    for (int i = 0; i < Machine.processor().getNumPhysPages(); i++)
+			freePages.add(i);
 	pageLock = new Lock();
     }
 
@@ -94,21 +96,21 @@ public class UserKernel extends ThreadedKernel {
      * @see	nachos.machine.Machine#getShellProgramName
      */
     public void run() {
-	super.run();
+        super.run();
 
-	UserProcess process = UserProcess.newUserProcess();
-	
-	String shellProgram = Machine.getShellProgramName();	
-	Lib.assertTrue(process.execute(shellProgram, new String[] { }));
+        UserProcess process = UserProcess.newUserProcess();
+        
+        String shellProgram = Machine.getShellProgramName();	
+        Lib.assertTrue(process.execute(shellProgram, new String[] { }));
 
-	KThread.currentThread().finish();
+        KThread.currentThread().finish();
     }
 
     /**
      * Terminate this kernel. Never returns.
      */
     public void terminate() {
-	super.terminate();
+	    super.terminate();
     }
     
     /**
@@ -120,6 +122,7 @@ public class UserKernel extends ThreadedKernel {
     	
     	if (numPages <= 0 || numPages > freePages.size())
     	{
+            System.out.println("num of pages failed " + numPages + " " + freePages.size());
     		pageLock.release();
     		return null;
     	}
